@@ -1,256 +1,225 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import './App.css'
 
-type Rarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary'
+type StatKey =
+  | 'Strength (STR)'
+  | 'Speed (SPD)'
+  | 'Sight (SIT)'
+  | 'Stealth (STH)'
+  | 'Search (SRC)'
+  | 'Charm (CRM)'
+  | 'Special (SPL)'
+  | 'Luck (LUK)'
+
+type Skill = {
+  name: string
+  stat: StatKey
+  level: number
+  notes?: string
+}
+
+type Ability = {
+  name: string
+  effect: string
+}
 
 type Resource = {
-  id: string
   name: string
-  category: string
-  rarity: Rarity
-  description: string
-  value: number
-  weight: number
-  quantityRange: {
-    min: number
+  quantity: string
+  detail: string
+}
+
+type Equipment = {
+  name: string
+  durability: string
+  status: string
+}
+
+type Character = {
+  name: string
+  wounds: {
+    tokens: number
     max: number
+    notes: string
   }
-  stats: {
-    power: number
-    defense: number
-    utility: number
+  stats: Record<StatKey, string>
+  skills: Skill[]
+  abilities: Ability[]
+  resources: Resource[]
+  equipment: Equipment[]
+  appearance: {
+    description: string
+    distinguishing: string
   }
-  tags: string[]
-  dropRate: number
-  notes: string
 }
 
-type ResourceForm = {
-  name: string
-  category: string
-  rarity: Rarity
-  description: string
-  value: number
-  weight: number
-  quantityMin: number
-  quantityMax: number
-  power: number
-  defense: number
-  utility: number
-  tagsText: string
-  dropRate: number
-  notes: string
-}
-
-const rarityColors: Record<Rarity, string> = {
-  Common: '#cbd5e1',
-  Uncommon: '#22c55e',
-  Rare: '#3b82f6',
-  Epic: '#a855f7',
-  Legendary: '#f59e0b',
-}
-
-const defaultForm: ResourceForm = {
-  name: 'Arcstone Fragment',
-  category: 'Material',
-  rarity: 'Rare',
-  description: 'A charged shard used to craft mid-tier gear and enchantments.',
-  value: 185,
-  weight: 0.3,
-  quantityMin: 1,
-  quantityMax: 4,
-  power: 12,
-  defense: 4,
-  utility: 8,
-  tagsText: 'material, forge, electric, mid-game',
-  dropRate: 28,
-  notes: 'Combine four shards to stabilize a conduit core.',
-}
-
-const starterResources: Resource[] = [
-  {
-    id: 'iron-ingot',
-    name: 'Iron Ingot',
-    category: 'Material',
-    rarity: 'Common',
-    description: 'Refined metal used by most blacksmiths for core crafting recipes.',
-    value: 45,
-    weight: 1.2,
-    quantityRange: { min: 1, max: 6 },
-    stats: { power: 4, defense: 6, utility: 3 },
-    tags: ['material', 'smithing', 'low-tier'],
-    dropRate: 50,
-    notes: 'Found in starter regions and mine chests.',
-  },
-  {
-    id: 'void-silk',
-    name: 'Void-Silk Thread',
-    category: 'Material',
-    rarity: 'Epic',
-    description: 'Mystic thread harvested from void spiders, ideal for rare cloaks.',
-    value: 420,
-    weight: 0.1,
-    quantityRange: { min: 1, max: 3 },
-    stats: { power: 6, defense: 10, utility: 15 },
-    tags: ['stealth', 'tailoring', 'magic'],
-    dropRate: 12,
-    notes: 'Enhances stealth and resistance when woven into armor.',
-  },
+const statOrder: StatKey[] = [
+  'Strength (STR)',
+  'Speed (SPD)',
+  'Sight (SIT)',
+  'Stealth (STH)',
+  'Search (SRC)',
+  'Charm (CRM)',
+  'Special (SPL)',
+  'Luck (LUK)',
 ]
 
-const parseTags = (value: string) =>
-  value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-
-const createId = () =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `resource-${Date.now()}-${Math.round(Math.random() * 10000)}`
-
-const buildResourceFromForm = (form: ResourceForm, id = 'preview'): Resource => ({
-  id,
-  name: form.name.trim() || 'Unnamed Resource',
-  category: form.category,
-  rarity: form.rarity,
-  description: form.description.trim(),
-  value: Number.isNaN(form.value) ? 0 : form.value,
-  weight: Number.isNaN(form.weight) ? 0 : form.weight,
-  quantityRange: {
-    min: Math.min(form.quantityMin, form.quantityMax),
-    max: Math.max(form.quantityMin, form.quantityMax),
+const starterCharacter: Character = {
+  name: 'Rowan Vale',
+  wounds: {
+    tokens: 1,
+    max: 5,
+    notes: 'Took a nasty scrape while vaulting a fence. -1 to physical checks until tended.',
   },
   stats: {
-    power: Math.max(0, form.power),
-    defense: Math.max(0, form.defense),
-    utility: Math.max(0, form.utility),
+    'Strength (STR)': 'd8',
+    'Speed (SPD)': 'd10',
+    'Sight (SIT)': 'd8',
+    'Stealth (STH)': 'd12',
+    'Search (SRC)': 'd10',
+    'Charm (CRM)': 'd6',
+    'Special (SPL)': 'd4',
+    'Luck (LUK)': 'd20',
   },
-  tags: parseTags(form.tagsText),
-  dropRate: Math.max(0, Math.min(100, form.dropRate)),
-  notes: form.notes.trim(),
-})
+  skills: [
+    { name: 'Urban Parkour', stat: 'Speed (SPD)', level: 2, notes: 'Ignore basic difficult terrain.' },
+    { name: 'Lock Lore', stat: 'Search (SRC)', level: 1, notes: '+1 when examining old mechanisms.' },
+    { name: 'Quick Wit', stat: 'Charm (CRM)', level: 1 },
+  ],
+  abilities: [
+    { name: 'Lucky Break', effect: 'Once per scene re-roll a failed Luck check; accept new result.' },
+    { name: 'Shadow Slip', effect: 'Advantage on first Stealth roll after entering a new area.' },
+  ],
+  resources: [
+    { name: 'Wound tokens', quantity: '1 / 5', detail: '-1 to all rolls per token; at max suffer critical consequence.' },
+    { name: 'Bandages', quantity: '2', detail: 'Removes 1 wound token after a short rest.' },
+    { name: 'Glow charges', quantity: '3', detail: 'Single-use light sources; dim light for 10 minutes.' },
+  ],
+  equipment: [
+    { name: 'Collapsible staff', durability: '85%', status: 'Bent tip (50% effective on heavy strikes)' },
+    { name: 'Worn satchel', durability: '65%', status: 'Advantage on stealth checks unless overfilled' },
+    { name: 'Spyglass charm', durability: '100%', status: '+1 to Sight on long-range scans' },
+  ],
+  appearance: {
+    description:
+      'Lean figure in layered streetwear; quiet confidence with a habit of scanning rooftops before stepping outside.',
+    distinguishing: 'Faint scar on left eyebrow, mismatched gloves, soft violet glow from the spyglass charm.',
+  },
+}
 
 function App() {
-  const [form, setForm] = useState<ResourceForm>(defaultForm)
-  const [resources, setResources] = useState<Resource[]>(starterResources)
-  const [status, setStatus] = useState('Ready to build a new resource file.')
-  const [simulationAttempts, setSimulationAttempts] = useState(5)
-  const [simulationResult, setSimulationResult] = useState('')
+  const [character, setCharacter] = useState<Character>(starterCharacter)
 
-  const previewResource = useMemo(() => buildResourceFromForm(form), [form])
-
-  const averageValue = useMemo(() => {
-    if (!resources.length) return 0
-    const total = resources.reduce((sum, item) => sum + item.value, 0)
-    return Math.round((total / resources.length) * 100) / 100
-  }, [resources])
-
-  const handleInputChange = (
-    field: keyof ResourceForm,
-    value: string | number | Rarity,
-  ) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: typeof value === 'number' ? Number(value) : value,
+  const updateStat = (key: StatKey, value: string) => {
+    setCharacter((current) => ({
+      ...current,
+      stats: { ...current.stats, [key]: value },
     }))
   }
 
-  const addResourceToList = () => {
-    if (!form.name.trim()) {
-      setStatus('Please provide a name before saving the resource.')
-      return
-    }
-
-    const prepared = buildResourceFromForm(form, createId())
-    setResources((list) => [prepared, ...list])
-    setStatus(`Added ${prepared.name} to the local test pack.`)
+  const updateWounds = (field: 'tokens' | 'max' | 'notes', value: string | number) => {
+    setCharacter((current) => ({
+      ...current,
+      wounds: { ...current.wounds, [field]: typeof value === 'number' ? value : value },
+    }))
   }
 
-  const resetForm = () => {
-    setForm(defaultForm)
-    setStatus('Form reset to defaults.')
+  const updateAppearance = (field: keyof Character['appearance'], value: string) => {
+    setCharacter((current) => ({
+      ...current,
+      appearance: { ...current.appearance, [field]: value },
+    }))
   }
 
-  const copyJson = async () => {
-    const payload = JSON.stringify(resources, null, 2)
-    try {
-      await navigator.clipboard.writeText(payload)
-      setStatus('Resource pack copied to clipboard as JSON.')
-    } catch (error) {
-      console.error(error)
-      setStatus('Copy failed. You can still download the JSON file.')
-    }
+  const updateSkill = (index: number, field: keyof Skill, value: string | number) => {
+    setCharacter((current) => {
+      const next = [...current.skills]
+      next[index] = { ...next[index], [field]: value }
+      return { ...current, skills: next }
+    })
   }
 
-  const downloadJson = () => {
-    const payload = JSON.stringify(resources, null, 2)
-    const blob = new Blob([payload], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = 'resource-pack.json'
-    anchor.click()
-    URL.revokeObjectURL(url)
-    setStatus('Download started for resource-pack.json')
+  const updateAbility = (index: number, field: keyof Ability, value: string) => {
+    setCharacter((current) => {
+      const next = [...current.abilities]
+      next[index] = { ...next[index], [field]: value }
+      return { ...current, abilities: next }
+    })
   }
 
-  const runSimulation = () => {
-    if (!resources.length) {
-      setSimulationResult('Add at least one resource before simulating drops.')
-      return
-    }
-
-    if (simulationAttempts < 1) {
-      setSimulationResult('Simulation attempts must be at least 1.')
-      return
-    }
-
-    const totals = new Map<string, number>()
-    const weightSum = resources.reduce((sum, res) => sum + res.dropRate, 0)
-
-    for (let attempt = 0; attempt < simulationAttempts; attempt += 1) {
-      const roll = Math.random() * weightSum
-      let cumulative = 0
-      const choice = resources.find((res) => {
-        cumulative += res.dropRate
-        return roll <= cumulative
-      })
-
-      if (!choice) continue
-      totals.set(choice.name, (totals.get(choice.name) ?? 0) + 1)
-    }
-
-    const lines = Array.from(totals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => `${name}: ${count}`)
-
-    setSimulationResult(
-      lines.length
-        ? `Drop test (${simulationAttempts} rolls): ${lines.join(' | ')}`
-        : 'No drops recorded. Adjust drop rates and try again.',
-    )
+  const updateResource = (index: number, field: keyof Resource, value: string) => {
+    setCharacter((current) => {
+      const next = [...current.resources]
+      next[index] = { ...next[index], [field]: value }
+      return { ...current, resources: next }
+    })
   }
+
+  const updateEquipment = (index: number, field: keyof Equipment, value: string) => {
+    setCharacter((current) => {
+      const next = [...current.equipment]
+      next[index] = { ...next[index], [field]: value }
+      return { ...current, equipment: next }
+    })
+  }
+
+  const addSkill = () => {
+    setCharacter((current) => ({
+      ...current,
+      skills: [...current.skills, { name: 'New skill', stat: 'Strength (STR)', level: 1, notes: '' }],
+    }))
+  }
+
+  const addAbility = () => {
+    setCharacter((current) => ({
+      ...current,
+      abilities: [...current.abilities, { name: 'New ability', effect: 'Describe what it does.' }],
+    }))
+  }
+
+  const addResource = () => {
+    setCharacter((current) => ({
+      ...current,
+      resources: [...current.resources, { name: 'New resource', quantity: '1', detail: 'Usage notes.' }],
+    }))
+  }
+
+  const addEquipment = () => {
+    setCharacter((current) => ({
+      ...current,
+      equipment: [
+        ...current.equipment,
+        { name: 'New equipment', durability: '100%', status: 'Ready for action.' },
+      ],
+    }))
+  }
+
+  const totalSkillBonus = character.skills.reduce((sum, skill) => sum + (Number(skill.level) || 0), 0)
 
   return (
     <main className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">Game Resource Kit</p>
-          <h1>Build & test game-ready resource files</h1>
+          <p className="eyebrow">Character tracking sheet</p>
+          <h1>{character.name}</h1>
           <p className="lede">
-            Create structured resources, validate their values, and simulate drop
-            rates before shipping them to your game. Everything saves locally so
-            you can export a clean JSON pack at any time.
+            Manage stats, wounds, and gear according to the Deep Stories rules. Track wound tokens and
+            make quick tweaks before each roll or push.
           </p>
           <div className="hero-stats">
             <div>
-              <p className="label">Resources in pack</p>
-              <strong>{resources.length}</strong>
+              <p className="label">Wound tokens</p>
+              <strong>
+                {character.wounds.tokens} / {character.wounds.max}
+              </strong>
             </div>
             <div>
-              <p className="label">Average value</p>
-              <strong>{averageValue}</strong>
+              <p className="label">Total skill bonus</p>
+              <strong>+{totalSkillBonus}</strong>
+            </div>
+            <div>
+              <p className="label">Signature stat</p>
+              <strong>{character.stats['Luck (LUK)']}</strong>
             </div>
           </div>
         </div>
@@ -259,339 +228,295 @@ function App() {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Resource builder</p>
-            <h2>Define a new resource</h2>
-            <p className="muted">
-              Fill out the fields below, then add the resource to the local test
-              pack. You can tweak values as you iterate.
-            </p>
+            <p className="eyebrow">Core info</p>
+            <h2>Identity & wounds</h2>
+            <p className="muted">Keep the name and wound tokens current before starting a scene.</p>
           </div>
-          <div className="status">{status}</div>
         </div>
 
         <div className="form-grid">
-          <label className="field">
-            <span>Name</span>
+          <label className="field span-2">
+            <span>Character name</span>
             <input
-              value={form.name}
-              onChange={(event) => handleInputChange('name', event.target.value)}
-              placeholder="Sunspire Ember"
+              value={character.name}
+              onChange={(event) => setCharacter({ ...character, name: event.target.value })}
             />
           </label>
 
           <label className="field">
-            <span>Category</span>
-            <select
-              value={form.category}
-              onChange={(event) =>
-                handleInputChange('category', event.target.value)
-              }
-            >
-              <option>Material</option>
-              <option>Consumable</option>
-              <option>Weapon</option>
-              <option>Armor</option>
-              <option>Quest Item</option>
-              <option>Currency</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Rarity</span>
-            <select
-              value={form.rarity}
-              onChange={(event) => handleInputChange('rarity', event.target.value as Rarity)}
-            >
-              {Object.keys(rarityColors).map((rarity) => (
-                <option key={rarity}>{rarity}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Value</span>
+            <span>Wound tokens</span>
             <input
               type="number"
-              value={form.value}
-              onChange={(event) => handleInputChange('value', event.target.value)}
               min={0}
-              step={1}
+              max={character.wounds.max}
+              value={character.wounds.tokens}
+              onChange={(event) => updateWounds('tokens', Number(event.target.value))}
             />
           </label>
 
           <label className="field">
-            <span>Weight</span>
+            <span>Maximum wounds</span>
             <input
               type="number"
-              value={form.weight}
-              onChange={(event) => handleInputChange('weight', event.target.value)}
-              min={0}
-              step={0.1}
-            />
-          </label>
-
-          <label className="field">
-            <span>Drop chance weight (0-100)</span>
-            <input
-              type="number"
-              value={form.dropRate}
-              onChange={(event) => handleInputChange('dropRate', event.target.value)}
-              min={0}
-              max={100}
-              step={1}
-            />
-          </label>
-
-          <label className="field">
-            <span>Quantity (min)</span>
-            <input
-              type="number"
-              value={form.quantityMin}
-              onChange={(event) => handleInputChange('quantityMin', event.target.value)}
-              min={0}
-              step={1}
-            />
-          </label>
-
-          <label className="field">
-            <span>Quantity (max)</span>
-            <input
-              type="number"
-              value={form.quantityMax}
-              onChange={(event) => handleInputChange('quantityMax', event.target.value)}
-              min={0}
-              step={1}
+              min={1}
+              value={character.wounds.max}
+              onChange={(event) => updateWounds('max', Number(event.target.value))}
             />
           </label>
 
           <label className="field span-2">
-            <span>Description</span>
+            <span>Consequence notes</span>
             <textarea
-              value={form.description}
-              onChange={(event) =>
-                handleInputChange('description', event.target.value)
-              }
-              rows={3}
-            />
-          </label>
-
-          <label className="field">
-            <span>Power</span>
-            <input
-              type="number"
-              value={form.power}
-              onChange={(event) => handleInputChange('power', event.target.value)}
-              min={0}
-            />
-          </label>
-
-          <label className="field">
-            <span>Defense</span>
-            <input
-              type="number"
-              value={form.defense}
-              onChange={(event) => handleInputChange('defense', event.target.value)}
-              min={0}
-            />
-          </label>
-
-          <label className="field">
-            <span>Utility</span>
-            <input
-              type="number"
-              value={form.utility}
-              onChange={(event) => handleInputChange('utility', event.target.value)}
-              min={0}
-            />
-          </label>
-
-          <label className="field">
-            <span>Tags (comma separated)</span>
-            <input
-              value={form.tagsText}
-              onChange={(event) => handleInputChange('tagsText', event.target.value)}
-              placeholder="fire, dungeon, mid-tier"
-            />
-          </label>
-
-          <label className="field span-2">
-            <span>Notes</span>
-            <textarea
-              value={form.notes}
-              onChange={(event) => handleInputChange('notes', event.target.value)}
               rows={2}
+              value={character.wounds.notes}
+              onChange={(event) => updateWounds('notes', event.target.value)}
             />
           </label>
         </div>
+      </section>
 
-        <div className="actions">
-          <button className="primary" onClick={addResourceToList}>
-            Add to test pack
-          </button>
-          <button className="ghost" onClick={resetForm}>
-            Reset form
-          </button>
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Stats</p>
+            <h2>Dice for each stat</h2>
+            <p className="muted">Use d4-d20 values based on the Deep Stories stat table.</p>
+          </div>
+        </div>
+
+        <div className="stat-grid">
+          {statOrder.map((key) => (
+            <label key={key} className="field">
+              <span>{key}</span>
+              <input
+                value={character.stats[key]}
+                onChange={(event) => updateStat(key, event.target.value)}
+                placeholder="d8"
+              />
+            </label>
+          ))}
         </div>
       </section>
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Live preview</p>
-            <h2>JSON payload ready for your game</h2>
+            <p className="eyebrow">Skills</p>
+            <h2>Bonuses tied to stats</h2>
+            <p className="muted">Skills add direct bonuses to related stat rolls.</p>
           </div>
-          <div className="preview-actions">
-            <button className="ghost" onClick={copyJson}>
-              Copy JSON
-            </button>
-            <button className="secondary" onClick={downloadJson}>
-              Download file
-            </button>
-          </div>
+          <button className="secondary" onClick={addSkill}>
+            Add skill
+          </button>
         </div>
 
-        <div className="preview-grid">
-          <article className="resource-card">
-            <header>
-              <div>
-                <p className="label">Preview resource</p>
-                <h3>{previewResource.name}</h3>
+        <div className="list-grid">
+          {character.skills.map((skill, index) => (
+            <div key={`${skill.name}-${index}`} className="list-card">
+              <div className="inline-grid">
+                <label className="field">
+                  <span>Name</span>
+                  <input
+                    value={skill.name}
+                    onChange={(event) => updateSkill(index, 'name', event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span>Stat</span>
+                  <select
+                    value={skill.stat}
+                    onChange={(event) => updateSkill(index, 'stat', event.target.value)}
+                  >
+                    {statOrder.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Level (+)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={skill.level}
+                    onChange={(event) => updateSkill(index, 'level', Number(event.target.value))}
+                  />
+                </label>
               </div>
-              <span
-                className="rarity"
-                style={{ borderColor: rarityColors[previewResource.rarity] }}
-              >
-                {previewResource.rarity}
-              </span>
-            </header>
-            <p className="muted">{previewResource.description}</p>
-            <dl className="stats">
-              <div>
-                <dt>Category</dt>
-                <dd>{previewResource.category}</dd>
-              </div>
-              <div>
-                <dt>Value</dt>
-                <dd>{previewResource.value}</dd>
-              </div>
-              <div>
-                <dt>Weight</dt>
-                <dd>{previewResource.weight}</dd>
-              </div>
-              <div>
-                <dt>Drop weight</dt>
-                <dd>{previewResource.dropRate}</dd>
-              </div>
-              <div>
-                <dt>Qty range</dt>
-                <dd>
-                  {previewResource.quantityRange.min} -
-                  {` ${previewResource.quantityRange.max}`}
-                </dd>
-              </div>
-            </dl>
-            <div className="stat-bars">
-              <div>
-                <p className="label">Power</p>
-                <div className="bar">
-                  <span style={{ width: `${previewResource.stats.power}%` }} />
-                </div>
-              </div>
-              <div>
-                <p className="label">Defense</p>
-                <div className="bar">
-                  <span style={{ width: `${previewResource.stats.defense}%` }} />
-                </div>
-              </div>
-              <div>
-                <p className="label">Utility</p>
-                <div className="bar">
-                  <span style={{ width: `${previewResource.stats.utility}%` }} />
-                </div>
-              </div>
-            </div>
-            <div className="tags">
-              {previewResource.tags.length ? (
-                previewResource.tags.map((tag) => <span key={tag}>{tag}</span>)
-              ) : (
-                <span className="muted">Add tags to quickly filter later.</span>
-              )}
-            </div>
-            {previewResource.notes && (
-              <p className="muted">Notes: {previewResource.notes}</p>
-            )}
-          </article>
-
-          <article className="json-preview">
-            <pre>
-              <code>{JSON.stringify(previewResource, null, 2)}</code>
-            </pre>
-          </article>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Resource pack</p>
-            <h2>Current test resources</h2>
-            <p className="muted">
-              Saved locally for this session. Re-run simulations after tweaking
-              drop weights to see how your loot table behaves.
-            </p>
-          </div>
-        </div>
-
-        <div className="resource-list">
-          {resources.map((item) => (
-            <div key={item.id} className="resource-row">
-              <div>
-                <p className="name">{item.name}</p>
-                <p className="muted small">{item.description}</p>
-              </div>
-              <div className="row-meta">
-                <span className="pill" style={{ color: rarityColors[item.rarity] }}>
-                  {item.rarity}
-                </span>
-                <span className="pill">Drop {item.dropRate}</span>
-                <span className="pill">Value {item.value}</span>
-              </div>
+              <label className="field">
+                <span>Notes</span>
+                <input
+                  value={skill.notes ?? ''}
+                  onChange={(event) => updateSkill(index, 'notes', event.target.value)}
+                  placeholder="When does this apply?"
+                />
+              </label>
             </div>
           ))}
-
-          {!resources.length && (
-            <p className="muted">Add resources to start simulating drops.</p>
-          )}
         </div>
       </section>
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Simulation</p>
-            <h2>Test the drop table</h2>
-            <p className="muted">
-              Uses the drop weight values above to roll a loot drop several
-              times. Increase the attempts for a clearer distribution sample.
-            </p>
+            <p className="eyebrow">Abilities</p>
+            <h2>Active & passive effects</h2>
+            <p className="muted">Capture special moves, advantages, or automatic successes.</p>
+          </div>
+          <button className="secondary" onClick={addAbility}>
+            Add ability
+          </button>
+        </div>
+
+        <div className="list-grid">
+          {character.abilities.map((ability, index) => (
+            <div key={`${ability.name}-${index}`} className="list-card">
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={ability.name}
+                  onChange={(event) => updateAbility(index, 'name', event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Effect</span>
+                <textarea
+                  rows={2}
+                  value={ability.effect}
+                  onChange={(event) => updateAbility(index, 'effect', event.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Resources</p>
+            <h2>Consumables & scene trackers</h2>
+            <p className="muted">Use this for wound tokens, temporary boosts, and limited-use items.</p>
+          </div>
+          <button className="secondary" onClick={addResource}>
+            Add resource
+          </button>
+        </div>
+
+        <div className="list-grid">
+          {character.resources.map((resource, index) => (
+            <div key={`${resource.name}-${index}`} className="list-card">
+              <div className="inline-grid">
+                <label className="field">
+                  <span>Name</span>
+                  <input
+                    value={resource.name}
+                    onChange={(event) => updateResource(index, 'name', event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span>Quantity</span>
+                  <input
+                    value={resource.quantity}
+                    onChange={(event) => updateResource(index, 'quantity', event.target.value)}
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Detail</span>
+                <input
+                  value={resource.detail}
+                  onChange={(event) => updateResource(index, 'detail', event.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Equipment</p>
+            <h2>Gear with durability</h2>
+            <p className="muted">Track the durability drops on natural 1s and note any penalties.</p>
+          </div>
+          <button className="secondary" onClick={addEquipment}>
+            Add equipment
+          </button>
+        </div>
+
+        <div className="list-grid">
+          {character.equipment.map((item, index) => (
+            <div key={`${item.name}-${index}`} className="list-card">
+              <div className="inline-grid">
+                <label className="field">
+                  <span>Name</span>
+                  <input
+                    value={item.name}
+                    onChange={(event) => updateEquipment(index, 'name', event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span>Durability</span>
+                  <input
+                    value={item.durability}
+                    onChange={(event) => updateEquipment(index, 'durability', event.target.value)}
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Status / effect</span>
+                <input
+                  value={item.status}
+                  onChange={(event) => updateEquipment(index, 'status', event.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Appearance</p>
+            <h2>How they look right now</h2>
+            <p className="muted">Note any scene-specific changes like dirt, torn clothing, or glow effects.</p>
           </div>
         </div>
 
-        <div className="simulation">
-          <label className="field">
-            <span>Number of rolls</span>
-            <input
-              type="number"
-              value={simulationAttempts}
-              onChange={(event) => setSimulationAttempts(Number(event.target.value))}
-              min={1}
-              step={1}
+        <div className="form-grid">
+          <label className="field span-2">
+            <span>Core description</span>
+            <textarea
+              rows={3}
+              value={character.appearance.description}
+              onChange={(event) => updateAppearance('description', event.target.value)}
             />
           </label>
-          <button className="primary" onClick={runSimulation}>
-            Run drop test
-          </button>
-          <p className="muted">{simulationResult}</p>
+          <label className="field span-2">
+            <span>Current distinguishing details</span>
+            <textarea
+              rows={2}
+              value={character.appearance.distinguishing}
+              onChange={(event) => updateAppearance('distinguishing', event.target.value)}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Quick reference</p>
+            <h2>JSON snapshot</h2>
+            <p className="muted">Copy this into your session notes or share with players.</p>
+          </div>
+        </div>
+        <div className="json-preview">
+          <pre>
+            <code>{JSON.stringify(character, null, 2)}</code>
+          </pre>
         </div>
       </section>
     </main>
